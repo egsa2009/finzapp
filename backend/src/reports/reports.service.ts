@@ -231,7 +231,7 @@ export class ReportsService {
       if (!merchantMap.has(key)) {
         merchantMap.set(key, []);
       }
-      merchantMap.get(key).push(transaction);
+      merchantMap.get(key)!.push(transaction);
     }
 
     // Filter to patterns with >= 3 occurrences
