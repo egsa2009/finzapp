@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm ci
+RUN npm install
 
 COPY . .
 
@@ -24,7 +24,7 @@ RUN addgroup -g 1001 -S nodejs && \
 COPY package*.json ./
 
 # Install production dependencies only
-RUN npm ci --only=production && \
+RUN npm install --omit=dev && \
     npm cache clean --force
 
 # Copy built application from builder
