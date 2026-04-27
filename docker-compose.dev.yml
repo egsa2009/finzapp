@@ -1,0 +1,69 @@
+version: "3.8"
+
+services:
+  # PostgreSQL Database
+  db:
+    environment:
+      POSTGRES_PASSWORD: dev_password
+
+  # Redis Cache
+  redis:
+    command: redis-server --requirepass dev_redis_password --maxmemory 128mb --maxmemory-policy allkeys-lru
+
+  # NLP Service - con volumen para hot-reload
+  nlp-service:
+    environment:
+      PYTHONUNBUFFERED: "1"
+    volumes:
+      - ./nlp-service:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # Backend API - modo desarrollo con hot-reload
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://finzapp_user:dev_password@db:5432/finzapp
+      REDIS_URL: redis://:dev_redis_password@redis:6379
+      JWT_SECRET: super_secret_jwt_key_min_32_characters_long
+      JWT_REFRESH_SECRET: super_secret_refresh_key_min_32_chars
+      JWT_EXPIRES_IN: 15m
+      JWT_REFRESH_EXPIRES_IN: 30d
+      INGEST_API_KEY: dev_api_key
+      NLP_SERVICE_URL: http://nlp-service:8000
+    volumes:
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - /app/node_modules
+    command: npm run dev
+
+  # Frontend - modo desarrollo con hot-reload
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      VITE_API_URL: http://localhost:3000/api/v1
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - /app/node_modules
+    command: npm run dev
+
+  # Adminer - Gestor de base de datos
+  adminer:
+    image: adminer:latest
+    container_name: finzapp-adminer
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
+    networks:
+      - finzapp-network
+    restart: unless-stopped
+    environment:
+      ADMINER_DEFAULT_SERVER: db

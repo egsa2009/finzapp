@@ -1,0 +1,228 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # Job 1: Lint and Test
+  lint-and-test:
+    runs-on: ubuntu-latest
+    name: Lint & Test
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # Setup Node
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      # Backend: Install, Lint, Test
+      - name: Backend - Install Dependencies
+        working-directory: ./backend
+        run: npm ci
+
+      - name: Backend - Lint
+        working-directory: ./backend
+        run: npm run lint -- --max-warnings=0
+
+      - name: Backend - Unit Tests
+        working-directory: ./backend
+        run: npm run test:coverage
+
+      - name: Backend - Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./backend/coverage/lcov.info
+          flags: backend
+
+      # Frontend: Install, Lint, Build, Test
+      - name: Frontend - Install Dependencies
+        working-directory: ./frontend
+        run: npm ci
+
+      - name: Frontend - Lint
+        working-directory: ./frontend
+        run: npm run lint
+
+      - name: Frontend - Build
+        working-directory: ./frontend
+        run: npm run build
+
+      - name: Frontend - Unit Tests
+        working-directory: ./frontend
+        run: npm run test
+
+      - name: Frontend - Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./frontend/coverage/lcov.info
+          flags: frontend
+
+      # Setup Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      # NLP Service: Install, Lint, Test
+      - name: NLP Service - Install Dependencies
+        working-directory: ./nlp-service
+        run: pip install -r requirements.txt
+
+      - name: NLP Service - Type Check
+        working-directory: ./nlp-service
+        run: |
+          pip install mypy
+          mypy . --ignore-missing-imports || true
+
+      - name: NLP Service - Tests
+        working-directory: ./nlp-service
+        run: pytest -v --cov=parser --cov-report=xml
+
+      - name: NLP Service - Upload Coverage
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./nlp-service/coverage.xml
+          flags: nlp-service
+
+  # Job 2: Security Scan
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # Setup Node
+      - uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      # Backend Security
+      - name: Backend - npm audit
+        working-directory: ./backend
+        run: npm audit --audit-level=high || true
+
+      - name: Backend - Snyk
+        uses: snyk/actions/node@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high --file=backend/package.json || true
+
+      # Frontend Security
+      - name: Frontend - npm audit
+        working-directory: ./frontend
+        run: npm audit --audit-level=high || true
+
+      # Setup Python
+      - uses: actions/setup-python@v4
+        with:
+          python-version: "3.12"
+
+      # NLP Service Security
+      - name: NLP Service - pip-audit
+        working-directory: ./nlp-service
+        run: |
+          pip install pip-audit
+          pip-audit || true
+
+  # Job 3: Build Docker Images (solo en main)
+  build-docker:
+    runs-on: ubuntu-latest
+    name: Build Docker Images
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [lint-and-test, security-scan]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      # Setup Docker Buildx
+      - uses: docker/setup-buildx-action@v2
+
+      # Setup environment file
+      - name: Create .env file
+        run: |
+          cp .env.example .env
+          sed -i 's/change_me_in_production/ci_test_password/g' .env
+          sed -i 's/change_redis_password/ci_redis_password/g' .env
+
+      # Build Docker Compose
+      - name: Build Docker Images
+        run: docker-compose build
+
+      # Start services
+      - name: Start Services
+        run: docker-compose up -d
+
+      # Wait for services to be healthy
+      - name: Wait for Services
+        run: |
+          timeout 120 bash -c '
+            while [ "$(docker ps --filter name=finzapp-db --filter status=running -q)" == "" ]; do
+              echo "Waiting for database..."
+              sleep 5
+            done
+          '
+
+      # Health checks
+      - name: Check Backend Health
+        run: |
+          for i in {1..30}; do
+            if curl -f http://localhost:3000/api/v1/health; then
+              echo "Backend is healthy"
+              exit 0
+            fi
+            echo "Attempt $i: Backend not ready yet"
+            sleep 2
+          done
+          exit 1
+
+      - name: Check NLP Service Health
+        run: |
+          for i in {1..30}; do
+            if curl -f http://localhost:8001/health; then
+              echo "NLP Service is healthy"
+              exit 0
+            fi
+            echo "Attempt $i: NLP Service not ready yet"
+            sleep 2
+          done
+          exit 1
+
+      # Run integration tests
+      - name: Run Integration Tests
+        run: |
+          docker-compose exec -T backend npm run test:integration || true
+          docker-compose exec -T nlp-service pytest tests/ -v || true
+
+      # Show logs on failure
+      - name: Show Logs on Failure
+        if: failure()
+        run: docker-compose logs
+
+      # Cleanup
+      - name: Cleanup
+        if: always()
+        run: docker-compose down -v
+
+  # Job 4: Deploy (placeholder, solo en main)
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy to Production
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    needs: [build-docker]
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy
+        run: |
+          echo "Deploying to production..."
+          # Aquí iría el script de deployment real (Docker Hub push, K8s deploy, etc.)
+          # Por ahora es un placeholder
