@@ -38,7 +38,8 @@ html {
 
 /* Remove default button styles */
 button {
-  @apply font-inherit cursor-pointer;
+  font-family: inherit;
+  cursor: pointer;
 }
 
 /* Input focus styles */
