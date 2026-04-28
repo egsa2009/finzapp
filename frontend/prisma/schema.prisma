@@ -1,0 +1,131 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionSource {
+  SMS
+  PUSH
+  MANUAL
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  password_hash  String
+  full_name      String
+  phone          String?
+  pay_day        Int       @default(1)
+  monthly_budget Decimal   @default(0) @db.Decimal(12, 2)
+  created_at     DateTime  @default(now()) @db.Timestamptz()
+  updated_at     DateTime  @updatedAt @db.Timestamptz()
+  deleted_at     DateTime? @db.Timestamptz()
+
+  transactions   Transaction[]
+  categories     Category[]
+  rules          ClassificationRule[]
+  refresh_tokens RefreshToken[]
+  budgets        Budget[]
+
+  @@index([email])
+}
+
+model RefreshToken {
+  id         String    @id @default(cuid())
+  user_id    String
+  token_hash String
+  expires_at DateTime  @db.Timestamptz()
+  created_at DateTime  @default(now()) @db.Timestamptz()
+  revoked_at DateTime? @db.Timestamptz()
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@index([token_hash])
+}
+
+model Category {
+  id         String    @id @default(cuid())
+  user_id    String?
+  name       String
+  icon       String?
+  color      String?
+  is_system  Boolean   @default(false)
+  created_at DateTime  @default(now()) @db.Timestamptz()
+  updated_at DateTime  @updatedAt @db.Timestamptz()
+
+  user         User?               @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  rules        ClassificationRule[]
+  budgets      Budget[]
+
+  @@unique([user_id, name])
+  @@index([user_id])
+  @@index([is_system])
+}
+
+model Transaction {
+  id                 String            @id @default(cuid())
+  user_id            String
+  category_id        String?
+  amount             Decimal           @db.Decimal(12, 2)
+  currency           String            @default("COP")
+  description        String
+  transaction_type   TransactionType
+  transaction_source TransactionSource
+  merchant           String?
+  transaction_at     DateTime          @db.Timestamptz()
+  raw_text           String?
+  confirmed          Boolean           @default(false)
+  created_at         DateTime          @default(now()) @db.Timestamptz()
+  updated_at         DateTime          @updatedAt @db.Timestamptz()
+  deleted_at         DateTime?         @db.Timestamptz()
+
+  user     User      @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category Category? @relation(fields: [category_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([transaction_at])
+  @@index([transaction_source])
+}
+
+model ClassificationRule {
+  id          String   @id @default(cuid())
+  user_id     String
+  category_id String
+  pattern     String
+  priority    Int      @default(100)
+  is_active   Boolean  @default(true)
+  created_at  DateTime @default(now()) @db.Timestamptz()
+  updated_at  DateTime @updatedAt @db.Timestamptz()
+
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+}
+
+model Budget {
+  id           String   @id @default(cuid())
+  user_id      String
+  category_id  String
+  month        DateTime @db.Timestamptz()
+  limit_amount Decimal  @db.Decimal(12, 2)
+  created_at   DateTime @default(now()) @db.Timestamptz()
+  updated_at   DateTime @updatedAt @db.Timestamptz()
+
+  user     User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [category_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, category_id, month])
+  @@index([user_id])
+}

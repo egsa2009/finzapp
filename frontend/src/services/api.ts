@@ -3,8 +3,8 @@ import { ApiResponse, PaginatedResponse, User, Transaction, Category, ReportSumm
 import { useAuthStore } from '../store/auth.store';
 
 const api: AxiosInstance = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000',
-  timeout: 10000,
+  baseURL: '/api',
+  timeout: 15000,
 });
 
 // Request interceptor: agregar token
@@ -28,10 +28,7 @@ api.interceptors.response.use(
     if (error.response?.status === 401) {
       if (refreshToken) {
         try {
-          const response = await axios.post(
-            `${import.meta.env.VITE_API_URL || 'http://localhost:3000'}/auth/refresh`,
-            { refresh_token: refreshToken }
-          );
+          const response = await axios.post('/api/auth/refresh', { refresh_token: refreshToken });
           const newAccessToken = response.data.data.access_token;
           setTokens(newAccessToken, refreshToken);
 
