@@ -25,7 +25,7 @@ export class IngestService {
     const applicableRule = await this.findApplicableRule(userId, raw_text);
 
     // Determine category
-    let categoryId = null;
+    let categoryId: string | null = null;
     if (applicableRule) {
       categoryId = applicableRule.category_id;
     }
@@ -73,7 +73,7 @@ export class IngestService {
     const applicableRule = await this.findApplicableRule(userId, raw_text);
 
     // Determine category
-    let categoryId = null;
+    let categoryId: string | null = null;
     if (applicableRule) {
       categoryId = applicableRule.category_id;
     }

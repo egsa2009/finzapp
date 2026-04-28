@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTransactionDto } from './dto/create-transaction.dto';
+import { TransactionType } from '@prisma/client';
 import { startOfDay, endOfDay, startOfMonth, endOfMonth } from 'date-fns';
 
 @Injectable()
@@ -14,7 +15,7 @@ export class TransactionsRepository {
         category_id: createTransactionDto.category_id,
         amount: createTransactionDto.amount.toString(),
         description: createTransactionDto.description,
-        transaction_type: createTransactionDto.transaction_type,
+        transaction_type: createTransactionDto.transaction_type as TransactionType,
         transaction_source: 'MANUAL',
         merchant: createTransactionDto.merchant,
         transaction_at: createTransactionDto.transaction_at,

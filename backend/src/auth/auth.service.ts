@@ -110,7 +110,7 @@ export class AuthService {
       });
 
       // Verify token exists in database and is not revoked
-      const storedToken = await this.prisma.refreshToken.findUnique({
+      const storedToken = await this.prisma.refreshToken.findFirst({
         where: { token_hash: refresh_token },
       });
 
